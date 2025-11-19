@@ -2,6 +2,7 @@ import os
 import io
 from flask import Flask, request, jsonify, send_file
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import NameObject, BooleanObject  # 👈 IMPORTANTE
 
 app = Flask(__name__)
 
@@ -12,23 +13,7 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
-}
-
-# Mapeo entre claves JSON y nombres de campos en el PDF
-JSON_TO_PDF_FIELDS = {
-    "titulacion": "TITULACION",
-    "nombre_apellidos": "NOMBRE_APELLIDOS",
-    "documento_id": "DOCUMENTO_ID",
-    "telefono_fijo": "TELEFONO_FIJO",
-    "fecha_nacimiento": "FECHA_NACIMIENTO",
-    "nacionalidad": "NACIONALIDAD",
-    "email": "EMAIL",
-    "telefono_movil": "TELEFONO_MOVIL",
-    "direccion": "DIRECCION",
-    "ciudad": "CIUDAD",
-    "provincia": "PROVINCIA",
-    "pais": "PAIS",
+    "masterpropio": "Contrato_MasterPropio.pdf",
 }
 
 
@@ -94,22 +79,32 @@ def llenar_pdf():
         writer = PdfWriter()
         writer.clone_reader_document_root(reader)
 
-        # 3) Construir diccionario con los valores a escribir
+        # 3) Obtener campos del PDF y mapear dinámicamente
+        #    Ejemplo: "NOMBRE_APELLIDOS" -> JSON key "nombre_apellidos"
+        fields = reader.get_fields() or {}
         pdf_field_values = {}
-        for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
+
+        for pdf_field_name in fields.keys():
+            json_key = pdf_field_name.lower()  # TITULACION -> titulacion
             value = data.get(json_key, "")
-            pdf_field_values[pdf_field] = str(value)
+            pdf_field_values[pdf_field_name] = str(value)
 
         # 4) Rellenar los campos en todas las páginas
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
-        # 5) Salida PDF a memoria
+        # 5) Forzar que se vean los valores en los visores (NeedAppearances)
+        if "/AcroForm" in writer._root_object:
+            writer._root_object["/AcroForm"].update(
+                {NameObject("/NeedAppearances"): BooleanObject(True)}
+            )
+
+        # 6) Salida PDF a memoria
         pdf_bytes = io.BytesIO()
         writer.write(pdf_bytes)
         pdf_bytes.seek(0)
 
-        # 6) Nombre del archivo final
+        # 7) Nombre del archivo final
         nombre_estudiante = data.get("nombre_apellidos", "Contrato")
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
