@@ -12,7 +12,7 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "masterpropio": "Contrato_MasterPropio.pdf",  # OJO: masterpropio en minúscula y sin guion
+    "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
 }
 
 # Mapeo entre claves JSON y nombres de campos en el PDF
@@ -87,29 +87,45 @@ def llenar_pdf():
         ), 500
 
     try:
-        # Leer PDF
+        # 1) Leer la plantilla
         reader = PdfReader(template_path)
-        writer = PdfWriter()
 
+        # 2) Crear writer y clonar el documento completo
+        writer = PdfWriter()
+        # Copiamos todas las páginas
         for page in reader.pages:
             writer.add_page(page)
 
-        # Construir diccionario de valores
+        # Copiar el diccionario /AcroForm (los campos de formulario)
+        root = reader.trailer.get("/Root", {})
+        acro_form = root.get("/AcroForm")
+        if acro_form is not None:
+            writer._root_object.update({"/AcroForm": acro_form})
+        else:
+            # Si el PDF realmente NO tiene formulario, devolvemos un error claro
+            return jsonify(
+                {
+                    "error": "La plantilla PDF no tiene formulario AcroForm",
+                    "detalle": "Revisa que el PDF tenga campos de formulario editables.",
+                }
+            ), 500
+
+        # 3) Construir diccionario con los valores a escribir
         pdf_field_values = {}
         for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
             value = data.get(json_key, "")
             pdf_field_values[pdf_field] = str(value)
 
-        # Rellenar campos
+        # 4) Rellenar los campos (normalmente basta con la primera página)
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
-        # Salida PDF a memoria
+        # 5) Salida PDF a memoria
         pdf_bytes = io.BytesIO()
         writer.write(pdf_bytes)
         pdf_bytes.seek(0)
 
-        # Nombre del archivo final
+        # 6) Nombre del archivo final
         nombre_estudiante = data.get("nombre_apellidos", "Contrato")
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
