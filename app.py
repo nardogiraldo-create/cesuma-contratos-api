@@ -17,28 +17,28 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON → CAMPOS DEL PDF (solo los que tú quieres)
+# MAPEO JSON → CAMPOS DEL PDF
 # -------------------------------------------------------
 # Clave JSON (lo que mandas desde Apps Script)
-#    -> Nombre EXACTO del campo en el PDF
+#    -> Nombre EXACTO (o casi exacto) del campo en el PDF
 JSON_TO_PDF_FIELDS = {
-    # Del programa académico
-    "titulacion": "Titulación:",
+    # Programa académico
+    "titulacion": "Titulación académica",
 
     # Datos del alumno
-    "nombre_apellidos": "Nombre y Apellidos:",
-    "documento_id": "Documento Identidad:",
-    "telefono_fijo": "Teléfono fijo:",
-    "fecha_nacimiento": "Fecha de Nacimiento:",
-    "nacionalidad": "Nacionalidad:",
-    "email": "Email:",
+    "nombre_apellidos": "Nombre y Apellidos",
+    "documento_id": "Documento Identidad",
+    "telefono_fijo": "Teléfono fijo",
+    "fecha_nacimiento": "Fecha de Nacimiento",
+    "nacionalidad": "Nacionalidad",
+    "email": "Email",
     "telefono_movil": "Teléfono móvil",
 
     # Lugar de residencia
-    "direccion": "Dirección:",
-    "ciudad": "Población / Ciudad:",
-    "provincia": "Provincia / Estado / Departamento:",
-    "pais": "País:",
+    "direccion": "Dirección",
+    "ciudad": "Población / Ciudad",
+    "provincia": "Provincia / Estado / Departamento",
+    "pais": "País",
 }
 
 
@@ -105,10 +105,27 @@ def llenar_pdf():
         writer.clone_reader_document_root(reader)
 
         # 3) Construir diccionario con los valores a escribir
+        #    - Usa el nombre principal del campo
+        #    - Y además una variante con/sin ":" para evitar problemas
         pdf_field_values = {}
+
         for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
-            value = data.get(json_key, "")
-            pdf_field_values[pdf_field_name] = str(value)
+            value = str(data.get(json_key, ""))
+
+            if not pdf_field_name:
+                continue
+
+            # Nombre principal tal cual
+            pdf_field_values[pdf_field_name] = value
+
+            # Variante alterna: si el campo en el PDF tiene o no ":" al final
+            if pdf_field_name.endswith(":"):
+                alt_name = pdf_field_name[:-1]  # sin ":"
+            else:
+                alt_name = pdf_field_name + ":"  # con ":"
+
+            if alt_name not in pdf_field_values:
+                pdf_field_values[alt_name] = value
 
         # 4) Rellenar los campos en todas las páginas
         for page in writer.pages:
