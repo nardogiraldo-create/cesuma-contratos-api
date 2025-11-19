@@ -20,25 +20,29 @@ PDF_TEMPLATES = {
 # MAPEO JSON → CAMPOS DEL PDF
 # -------------------------------------------------------
 # Clave JSON (lo que mandas desde Apps Script)
-#    -> Nombre EXACTO (o casi exacto) del campo en el PDF
+#    -> Nombre del campo en el PDF (visible en el contrato)
 JSON_TO_PDF_FIELDS = {
     # Programa académico
-    "titulacion": "Titulación académica",
+    "titulacion": "Titulación académica:",
 
     # Datos del alumno
-    "nombre_apellidos": "Nombre y Apellidos",
-    "documento_id": "Documento Identidad",
-    "telefono_fijo": "Teléfono fijo",
-    "fecha_nacimiento": "Fecha de Nacimiento",
-    "nacionalidad": "Nacionalidad",
-    "email": "Email",
-    "telefono_movil": "Teléfono móvil",
+    "nombre_apellidos": "Nombre y Apellidos:",
+    "documento_id": "Documento Identidad:",
+    "telefono_fijo": "Teléfono fijo:",
+    "fecha_nacimiento": "Fecha de Nacimiento:",
+    "nacionalidad": "Nacionalidad:",
+    "email": "Email:",
+    "telefono_movil": "Teléfono móvil",            # sabemos que este funciona así
+    "ocupacion_actual": "Ocupación actual:",       # NUEVO
 
     # Lugar de residencia
-    "direccion": "Dirección",
-    "ciudad": "Población / Ciudad",
-    "provincia": "Provincia / Estado / Departamento",
-    "pais": "País",
+    "direccion": "Dirección:",
+    "ciudad": "Población / Ciudad:",
+    "provincia": "Provincia / Estado / Departamento:",  # AJUSTADO
+    "pais": "País:",
+
+    # (Opcional) Alias por si en tu JSON usas otro nombre:
+    "provincia_estado_departamento": "Provincia / Estado / Departamento:",
 }
 
 
@@ -115,10 +119,10 @@ def llenar_pdf():
             if not pdf_field_name:
                 continue
 
-            # Nombre principal tal cual
+            # Nombre principal tal cual lo definimos aquí
             pdf_field_values[pdf_field_name] = value
 
-            # Variante alterna: si el campo en el PDF tiene o no ":" al final
+            # Variante alterna: con o sin ":" al final
             if pdf_field_name.endswith(":"):
                 alt_name = pdf_field_name[:-1]  # sin ":"
             else:
