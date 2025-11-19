@@ -12,7 +12,7 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "master_propio": "Contrato_MasterPropio.pdf",
+    "masterpropio": "Contrato_MasterPropio.pdf",  # OJO: masterpropio en minúscula y sin guion
 }
 
 # Mapeo entre claves JSON y nombres de campos en el PDF
@@ -66,6 +66,65 @@ def llenar_pdf():
 
     tipo_contrato = str(tipo_contrato).strip().lower()
     if tipo_contrato not in PDF_TEMPLATES:
-        return jsonify({
-            "error": "tipo_contrato no válido",
-            "permitidos"
+        return jsonify(
+            {
+                "error": "tipo_contrato no válido",
+                "permitidos": list(PDF_TEMPLATES.keys()),
+            }
+        ), 400
+
+    # Ruta plantilla
+    template_filename = PDF_TEMPLATES[tipo_contrato]
+    template_path = os.path.join(os.path.dirname(__file__), template_filename)
+
+    if not os.path.exists(template_path):
+        return jsonify(
+            {
+                "error": "No se encontró la plantilla PDF para el tipo de contrato",
+                "plantilla_esperada": template_filename,
+                "tipo_contrato": tipo_contrato,
+            }
+        ), 500
+
+    try:
+        # Leer PDF
+        reader = PdfReader(template_path)
+        writer = PdfWriter()
+
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # Construir diccionario de valores
+        pdf_field_values = {}
+        for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
+            value = data.get(json_key, "")
+            pdf_field_values[pdf_field] = str(value)
+
+        # Rellenar campos
+        for page in writer.pages:
+            writer.update_page_form_field_values(page, pdf_field_values)
+
+        # Salida PDF a memoria
+        pdf_bytes = io.BytesIO()
+        writer.write(pdf_bytes)
+        pdf_bytes.seek(0)
+
+        # Nombre del archivo final
+        nombre_estudiante = data.get("nombre_apellidos", "Contrato")
+        nombre_estudiante = sanitize_filename(nombre_estudiante)
+        filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
+
+        return send_file(
+            pdf_bytes,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    except Exception as e:
+        return jsonify({"error": "Error generando PDF", "detalle": str(e)}), 500
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
