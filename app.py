@@ -16,6 +16,31 @@ PDF_TEMPLATES = {
     "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
 }
 
+# -------------------------------------------------------
+# MAPEO JSON → CAMPOS DEL PDF (solo los que tú quieres)
+# -------------------------------------------------------
+# Clave JSON (lo que mandas desde Apps Script)
+#    -> Nombre EXACTO del campo en el PDF
+JSON_TO_PDF_FIELDS = {
+    # Del programa académico
+    "titulacion": "Titulación:",
+
+    # Datos del alumno
+    "nombre_apellidos": "Nombre y Apellidos:",
+    "documento_id": "Documento Identidad:",
+    "telefono_fijo": "Teléfono fijo:",
+    "fecha_nacimiento": "Fecha de Nacimiento:",
+    "nacionalidad": "Nacionalidad:",
+    "email": "Email:",
+    "telefono_movil": "Teléfono móvil",
+
+    # Lugar de residencia
+    "direccion": "Dirección:",
+    "ciudad": "Población / Ciudad:",
+    "provincia": "Provincia / Estado / Departamento:",
+    "pais": "País:",
+}
+
 
 def sanitize_filename(text: str, default: str = "Contrato") -> str:
     """Limpia caracteres raros del nombre de archivo."""
@@ -30,55 +55,6 @@ def sanitize_filename(text: str, default: str = "Contrato") -> str:
 @app.route("/")
 def home():
     return "API CESUMA lista para generar contratos PDF (endpoint /llenar_pdf activo) 😎"
-
-
-@app.route("/listar_campos_pdf", methods=["GET"])
-def listar_campos_pdf():
-    """
-    Endpoint de debug:
-    Devuelve en JSON todos los nombres de campos de formulario
-    de la plantilla PDF del tipo_contrato indicado.
-
-    Uso:
-    /listar_campos_pdf?tipo_contrato=doctorado
-    /listar_campos_pdf?tipo_contrato=maestria
-    /listar_campos_pdf?tipo_contrato=licenciatura
-    /listar_campos_pdf?tipo_contrato=masterpropio
-    """
-    tipo_contrato = request.args.get("tipo_contrato", "").strip().lower()
-    if tipo_contrato not in PDF_TEMPLATES:
-        return jsonify(
-            {
-                "error": "tipo_contrato no válido",
-                "permitidos": list(PDF_TEMPLATES.keys()),
-            }
-        ), 400
-
-    template_filename = PDF_TEMPLATES[tipo_contrato]
-    template_path = os.path.join(os.path.dirname(__file__), template_filename)
-
-    if not os.path.exists(template_path):
-        return jsonify(
-            {
-                "error": "No se encontró la plantilla PDF para el tipo de contrato",
-                "plantilla_esperada": template_filename,
-                "tipo_contrato": tipo_contrato,
-            }
-        ), 500
-
-    try:
-        reader = PdfReader(template_path)
-        fields = reader.get_fields() or {}
-        field_names = list(fields.keys())
-        return jsonify(
-            {
-                "tipo_contrato": tipo_contrato,
-                "plantilla": template_filename,
-                "campos_encontrados": field_names,
-            }
-        )
-    except Exception as e:
-        return jsonify({"error": "Error leyendo campos del PDF", "detalle": str(e)}), 500
 
 
 @app.route("/llenar_pdf", methods=["POST"])
@@ -128,14 +104,9 @@ def llenar_pdf():
         writer = PdfWriter()
         writer.clone_reader_document_root(reader)
 
-        # 3) Obtener campos del PDF y mapear dinámicamente:
-        #    Si el campo en el PDF se llama "NOMBRE_APELLIDOS",
-        #    buscará data["nombre_apellidos"].
-        fields = reader.get_fields() or {}
+        # 3) Construir diccionario con los valores a escribir
         pdf_field_values = {}
-
-        for pdf_field_name in fields.keys():
-            json_key = pdf_field_name.lower()  # "NOMBRE_APELLIDOS" -> "nombre_apellidos"
+        for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
             value = data.get(json_key, "")
             pdf_field_values[pdf_field_name] = str(value)
 
@@ -168,6 +139,48 @@ def llenar_pdf():
 
     except Exception as e:
         return jsonify({"error": "Error generando PDF", "detalle": str(e)}), 500
+
+
+# (Opcional) Endpoint de debug para listar campos del PDF
+@app.route("/listar_campos_pdf", methods=["GET"])
+def listar_campos_pdf():
+    """
+    Devuelve en JSON los nombres de campos del PDF según tipo_contrato.
+    """
+    tipo_contrato = request.args.get("tipo_contrato", "").strip().lower()
+    if tipo_contrato not in PDF_TEMPLATES:
+        return jsonify(
+            {
+                "error": "tipo_contrato no válido",
+                "permitidos": list(PDF_TEMPLATES.keys()),
+            }
+        ), 400
+
+    template_filename = PDF_TEMPLATES[tipo_contrato]
+    template_path = os.path.join(os.path.dirname(__file__), template_filename)
+
+    if not os.path.exists(template_path):
+        return jsonify(
+            {
+                "error": "No se encontró la plantilla PDF para el tipo de contrato",
+                "plantilla_esperada": template_filename,
+                "tipo_contrato": tipo_contrato,
+            }
+        ), 500
+
+    try:
+        reader = PdfReader(template_path)
+        fields = reader.get_fields() or {}
+        field_names = list(fields.keys())
+        return jsonify(
+            {
+                "tipo_contrato": tipo_contrato,
+                "plantilla": template_filename,
+                "campos_encontrados": field_names,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": "Error leyendo campos del PDF", "detalle": str(e)}), 500
 
 
 if __name__ == "__main__":
