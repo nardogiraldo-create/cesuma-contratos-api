@@ -2,7 +2,7 @@ import os
 import io
 from flask import Flask, request, jsonify, send_file
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import NameObject, BooleanObject  # 👈 IMPORTANTE
+from pypdf.generic import NameObject, BooleanObject
 
 app = Flask(__name__)
 
@@ -13,7 +13,7 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "masterpropio": "Contrato_MasterPropio.pdf",
+    "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
 }
 
 
@@ -30,6 +30,55 @@ def sanitize_filename(text: str, default: str = "Contrato") -> str:
 @app.route("/")
 def home():
     return "API CESUMA lista para generar contratos PDF (endpoint /llenar_pdf activo) 😎"
+
+
+@app.route("/listar_campos_pdf", methods=["GET"])
+def listar_campos_pdf():
+    """
+    Endpoint de debug:
+    Devuelve en JSON todos los nombres de campos de formulario
+    de la plantilla PDF del tipo_contrato indicado.
+
+    Uso:
+    /listar_campos_pdf?tipo_contrato=doctorado
+    /listar_campos_pdf?tipo_contrato=maestria
+    /listar_campos_pdf?tipo_contrato=licenciatura
+    /listar_campos_pdf?tipo_contrato=masterpropio
+    """
+    tipo_contrato = request.args.get("tipo_contrato", "").strip().lower()
+    if tipo_contrato not in PDF_TEMPLATES:
+        return jsonify(
+            {
+                "error": "tipo_contrato no válido",
+                "permitidos": list(PDF_TEMPLATES.keys()),
+            }
+        ), 400
+
+    template_filename = PDF_TEMPLATES[tipo_contrato]
+    template_path = os.path.join(os.path.dirname(__file__), template_filename)
+
+    if not os.path.exists(template_path):
+        return jsonify(
+            {
+                "error": "No se encontró la plantilla PDF para el tipo de contrato",
+                "plantilla_esperada": template_filename,
+                "tipo_contrato": tipo_contrato,
+            }
+        ), 500
+
+    try:
+        reader = PdfReader(template_path)
+        fields = reader.get_fields() or {}
+        field_names = list(fields.keys())
+        return jsonify(
+            {
+                "tipo_contrato": tipo_contrato,
+                "plantilla": template_filename,
+                "campos_encontrados": field_names,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": "Error leyendo campos del PDF", "detalle": str(e)}), 500
 
 
 @app.route("/llenar_pdf", methods=["POST"])
@@ -79,13 +128,14 @@ def llenar_pdf():
         writer = PdfWriter()
         writer.clone_reader_document_root(reader)
 
-        # 3) Obtener campos del PDF y mapear dinámicamente
-        #    Ejemplo: "NOMBRE_APELLIDOS" -> JSON key "nombre_apellidos"
+        # 3) Obtener campos del PDF y mapear dinámicamente:
+        #    Si el campo en el PDF se llama "NOMBRE_APELLIDOS",
+        #    buscará data["nombre_apellidos"].
         fields = reader.get_fields() or {}
         pdf_field_values = {}
 
         for pdf_field_name in fields.keys():
-            json_key = pdf_field_name.lower()  # TITULACION -> titulacion
+            json_key = pdf_field_name.lower()  # "NOMBRE_APELLIDOS" -> "nombre_apellidos"
             value = data.get(json_key, "")
             pdf_field_values[pdf_field_name] = str(value)
 
