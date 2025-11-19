@@ -90,25 +90,9 @@ def llenar_pdf():
         # 1) Leer la plantilla
         reader = PdfReader(template_path)
 
-        # 2) Crear writer y clonar el documento completo
+        # 2) Clonar TODO el documento (páginas + AcroForm + estructura)
         writer = PdfWriter()
-        # Copiamos todas las páginas
-        for page in reader.pages:
-            writer.add_page(page)
-
-        # Copiar el diccionario /AcroForm (los campos de formulario)
-        root = reader.trailer.get("/Root", {})
-        acro_form = root.get("/AcroForm")
-        if acro_form is not None:
-            writer._root_object.update({"/AcroForm": acro_form})
-        else:
-            # Si el PDF realmente NO tiene formulario, devolvemos un error claro
-            return jsonify(
-                {
-                    "error": "La plantilla PDF no tiene formulario AcroForm",
-                    "detalle": "Revisa que el PDF tenga campos de formulario editables.",
-                }
-            ), 500
+        writer.clone_reader_document_root(reader)
 
         # 3) Construir diccionario con los valores a escribir
         pdf_field_values = {}
@@ -116,7 +100,7 @@ def llenar_pdf():
             value = data.get(json_key, "")
             pdf_field_values[pdf_field] = str(value)
 
-        # 4) Rellenar los campos (normalmente basta con la primera página)
+        # 4) Rellenar los campos en todas las páginas
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
