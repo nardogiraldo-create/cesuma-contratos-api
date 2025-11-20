@@ -41,12 +41,12 @@ FIXED_PRICING = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (FINAL)
-# Se han añadido todos los campos financieros.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (CORRECCIÓN FINAL)
+# Basado 100% en el JSON de depuración de Doctorado.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa",
+    "nombre_programa": "Nombre del programa", # <-- ¡Confirmado!
     "titulacion": "Titulaci\u00f3n acad\u00e9mica", 
     
     # DATOS DEL ALUMNO/A
@@ -61,13 +61,13 @@ JSON_TO_PDF_FIELDS = {
     
     # LUGAR DE RESIDENCIA
     "direccion": "Direcci\u00f3n",
-    "ciudad": "Poblaci\u00f3n / Ciudad",
-    "provincia": "Provincia / Estado / Departamento", 
-    "pais": "Pa\u00eds", 
+    "ciudad": "Poblaci\u00f3n / Ciudad", # <-- ¡Confirmado!
+    "provincia": "Provincia / Estado / Departamento", # <-- ¡Confirmado!
+    "pais": "Pa\u00eds", # <-- ¡Confirmado!
 
-    # Campos de Precio Fijo (Nombres extraídos del JSON de Doctorado)
+    # Campos de Precio Fijo
     "total": "Total",
-    "matricula": "Matrícula",
+    "matricula": "Matr\u00edcula",
     "tipo_pago": "Tipo de pago",
     "num_cuotas": "Cuotas", 
     "importe_cuota": "Importe",
@@ -238,7 +238,7 @@ def llenar_pdf():
     enriched["fecha_inicio_fija"] = "10-Dic-2025" 
 
     # ----------------------------------------------------
-    # HARDCODING: DATOS DE PRECIO SEGÚN TIPO DE CONTRATO (¡NUEVO!)
+    # HARDCODING: DATOS DE PRECIO SEGÚN TIPO DE CONTRATO
     # ----------------------------------------------------
     pricing = FIXED_PRICING.get(tipo_contrato, {})
     if pricing:
@@ -246,19 +246,18 @@ def llenar_pdf():
     
     # ----------------------------------------------------
     # ASEGURAR CLAVES FALTANTES
+    # Se añade una lista explícita para asegurar que siempre haya una clave
+    # para que .get(json_key, "") no falle en el paso 4.
     # ----------------------------------------------------
-    if "nombre_programa" not in enriched:
-        enriched["nombre_programa"] = ""
-    if "pais" not in enriched:
-        enriched["pais"] = ""
-    if "provincia" not in enriched:
-        enriched["provincia"] = ""
-        
-    # Asegurar que las claves de precio existan, incluso si no se usan
-    for key in FIXED_PRICING.get("doctorado", {}).keys():
+    required_keys = ["nombre_programa", "pais", "provincia", "ciudad"] 
+    
+    for key in required_keys:
         if key not in enriched:
             enriched[key] = ""
-
+        # También nos aseguramos de que si existe, no sea None, sino str
+        elif enriched[key] is None:
+            enriched[key] = ""
+        
     # 4. Construir diccionario de campos para el PDF
     pdf_fields = {}
     for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
