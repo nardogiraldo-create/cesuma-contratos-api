@@ -20,7 +20,7 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# DATOS DE PRECIO FIJOS
+# DATOS DE PRECIO FIJOS SEGÚN EL TIPO DE CONTRATO
 # -------------------------------------------------------
 FIXED_PRICING = {
     "doctorado": {
@@ -40,12 +40,11 @@ FIXED_PRICING = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (DEFINITIVO)
-# Extraído EXACTAMENTE de tu JSON de depuración.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa", # Confirmado en tu JSON
+    "nombre_programa": "Nombre del programa", 
     "titulacion": "Titulaci\u00f3n acad\u00e9mica", 
     
     # DATOS DEL ALUMNO/A
@@ -60,10 +59,9 @@ JSON_TO_PDF_FIELDS = {
     
     # LUGAR DE RESIDENCIA
     "direccion": "Direcci\u00f3n",
-    # Tu JSON dice literalmente "Poblaci\u00f3n / Ciudad"
     "ciudad": "Poblaci\u00f3n / Ciudad", 
     "provincia": "Provincia / Estado / Departamento", 
-    "pais": "Pa\u00eds", # Confirmado en tu JSON (con tilde)
+    "pais": "Pa\u00eds", 
 
     # Campos de Precio Fijo
     "total": "Total",
@@ -112,7 +110,6 @@ def home():
 
 @app.route("/listar_campos", methods=["GET"])
 def listar_campos():
-    # Endpoint de depuración conservado
     tipo = request.args.get("tipo_contrato", "doctorado").strip().lower()
     if tipo not in PDF_TEMPLATES:
         return jsonify({"error": "tipo invalido"}), 400
@@ -145,27 +142,35 @@ def llenar_pdf():
 
     enriched = dict(data)
     
-    # Valores fijos
+    # ===========================================================
+    # APLICANDO TUS CORRECCIONES SOLICITADAS
+    # ===========================================================
+    
+    # 1. PAIS AUTOMÁTICO: Siempre será Colombia
+    enriched["pais"] = "Colombia"
+    
+    # 2. TELÉFONO FIJO = TELÉFONO MÓVIL
+    # Tomamos lo que venga en el móvil y lo ponemos en el fijo
+    telefono_movil_valor = enriched.get("telefono_movil", "")
+    enriched["telefono_fijo"] = telefono_movil_valor
+    
+    # 3. Valores Fijos existentes
     enriched["ocupacion_actual"] = "Trabajador" 
     enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
     enriched["fecha_inicio_fija"] = "10-Dic-2025" 
 
-    # Precios fijos
+    # 4. Precios fijos según contrato
     pricing = FIXED_PRICING.get(tipo_contrato, {})
     if pricing:
         enriched.update(pricing)
     
-    # DEBUG: Imprimir qué datos llegaron realmente (Ver logs de Render si falla)
-    print(f"--- DATOS RECIBIDOS PARA {tipo_contrato} ---")
-    print(f"Programa: {enriched.get('nombre_programa')}")
-    print(f"Pais: {enriched.get('pais')}")
-    print(f"Ciudad: {enriched.get('ciudad')}")
-    
-    # Asegurar claves vacías si no llegan
-    for key in ["nombre_programa", "pais", "provincia", "ciudad"]:
+    # 5. Asegurar claves vacías si no llegan (para evitar errores en el mapeo)
+    # Nota: pais y telefono_fijo ya están cubiertos arriba
+    for key in ["nombre_programa", "provincia", "ciudad"]:
         if key not in enriched or enriched[key] is None:
             enriched[key] = ""
         
+    # Construcción del diccionario final para el PDF
     pdf_fields = {}
     for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
         value = enriched.get(json_key, "")
