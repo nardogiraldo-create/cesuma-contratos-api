@@ -11,7 +11,6 @@ app = Flask(__name__)
 
 # -------------------------------------------------------
 # CONFIGURACIÓN DE PLANTILLAS PDF
-# Los nombres deben coincidir con los archivos en Render
 # -------------------------------------------------------
 PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
@@ -21,32 +20,35 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO (FINAL INTENTO)
-# Se utilizan nombres genéricos (Text1, Text2...) para el Doctorado/Licenciatura
-# ya que los nombres basados en el texto visible fallaron.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (¡CORRECCIÓN DEFINITIVA!)
+# Los valores de la derecha se extrajeron directamente de tu JSON de depuración.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
-    # El orden se basa en la secuencia probable de creación en el PDF
-    "nombre_programa": "Text1",
-    "titulacion": "Text2",
-    "fecha_inicio_fija": "Text3",
+    # DATOS DEL PROGRAMA
+    "nombre_programa": "Nombre del programa",
+    "titulacion": "Titulaci\u00f3n acad\u00e9mica", # El campo de titulacion en el JSON se llama asi
     
-    "nombre_apellidos": "Text4",
-    "documento_id": "Text5",
-    "telefono_fijo": "Text6",
-    "fecha_nacimiento": "Text7",
+    # DATOS DEL ALUMNO/A
+    "nombre_apellidos": "Nombre y Apellidos",
+    "documento_id": "Documento Identidad",       # CORREGIDO: No lleva Nº
+    "telefono_fijo": "Tel\u00e9fono fijo",
+    "fecha_nacimiento": "Fecha de Nacimiento",
+    "nacionalidad": "Nacionalidad",              # CORREGIDO: Sin espacios ni dos puntos
+    "email": "Email",                            # CORREGIDO: Sin dos puntos
+    "telefono_movil": "Tel\u00e9fono m\u00f3vil",    # CORREGIDO: Usando el código unicode
     
-    "email": "Text8",
-    "telefono_movil": "Teléfono móvil", # Este nombre sí funcionó antes
-    "nacionalidad": "Text9",
+    # LUGAR DE RESIDENCIA
+    "direccion": "Direcci\u00f3n",
+    "ciudad": "Poblaci\u00f3n / Ciudad",
+    "provincia": "Provincia / Estado / Departamento", 
+    "pais": "Pa\u00eds",
 
-    "direccion": "Text10",
-    "ciudad": "Text11",
-    "provincia": "Text12",
-    "pais": "Text13", 
-
-    # Campos extra
-    "fecha_actual": "Text14",
+    # Campos extra (calculados o fijos):
+    "fecha_actual": "fecha_original", # El JSON muestra 'fecha_original'
+    "fecha_inicio_fija": "Fecha de inicio_af_date", # El JSON muestra este nombre largo
+    
+    # Si usas el campo "fecha larga" para algo:
+    # "fecha_larga": "fecha larga", 
 }
 
 
