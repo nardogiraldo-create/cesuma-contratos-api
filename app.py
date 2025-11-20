@@ -20,35 +20,35 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (¡CORRECCIÓN DEFINITIVA!)
-# Los valores de la derecha se extrajeron directamente de tu JSON de depuración.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (CORRECCIÓN FINAL)
+# Se han añadido 'Ocupación actual' y se ha reconfirmado el resto.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
     "nombre_programa": "Nombre del programa",
-    "titulacion": "Titulaci\u00f3n acad\u00e9mica", # El campo de titulacion en el JSON se llama asi
+    "titulacion": "Titulaci\u00f3n acad\u00e9mica", 
     
     # DATOS DEL ALUMNO/A
     "nombre_apellidos": "Nombre y Apellidos",
-    "documento_id": "Documento Identidad",       # CORREGIDO: No lleva Nº
+    "documento_id": "Documento Identidad",
     "telefono_fijo": "Tel\u00e9fono fijo",
     "fecha_nacimiento": "Fecha de Nacimiento",
-    "nacionalidad": "Nacionalidad",              # CORREGIDO: Sin espacios ni dos puntos
-    "email": "Email",                            # CORREGIDO: Sin dos puntos
-    "telefono_movil": "Tel\u00e9fono m\u00f3vil",    # CORREGIDO: Usando el código unicode
+    "nacionalidad": "Nacionalidad",
+    "email": "Email",
+    "telefono_movil": "Tel\u00e9fono m\u00f3vil",
+    
+    # NUEVO: Campo para hardcoding "Trabajador"
+    "ocupacion_actual": "Ocupaci\u00f3n actual", 
     
     # LUGAR DE RESIDENCIA
     "direccion": "Direcci\u00f3n",
     "ciudad": "Poblaci\u00f3n / Ciudad",
-    "provincia": "Provincia / Estado / Departamento", 
-    "pais": "Pa\u00eds",
+    "provincia": "Provincia / Estado / Departamento", # Nombre exacto del campo
+    "pais": "Pa\u00eds", # Nombre exacto del campo
 
     # Campos extra (calculados o fijos):
-    "fecha_actual": "fecha_original", # El JSON muestra 'fecha_original'
-    "fecha_inicio_fija": "Fecha de inicio_af_date", # El JSON muestra este nombre largo
-    
-    # Si usas el campo "fecha larga" para algo:
-    # "fecha_larga": "fecha larga", 
+    "fecha_actual": "fecha_original", 
+    "fecha_inicio_fija": "Fecha de inicio_af_date", 
 }
 
 
@@ -196,16 +196,32 @@ def llenar_pdf():
             }
         ), 500
 
-    # 3. Enriquecer datos (añadir fechas, etc.)
+    # 3. Enriquecer datos (añadir fechas, hardcoding y asegurar claves)
     enriched = dict(data)
+    
+    # ----------------------------------------------------
+    # HARDCODING Y VALORES FIJOS
+    # ----------------------------------------------------
+    # Ocupación actual (Solicitud del usuario: fijo a Trabajador)
+    enriched["ocupacion_actual"] = "Trabajador" 
+    
     # Fecha actual en formato dd/mm/aaaa
     enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
+    
     # Fecha de inicio fija
     enriched["fecha_inicio_fija"] = "10-Dic-2025" 
-    # Nombre del programa por si no viene
+    
+    # ----------------------------------------------------
+    # ASEGURAR CLAVES FALTANTES (País, Provincia, Programa)
+    # Se añaden al diccionario, incluso si vienen vacías de Apps Script.
+    # ----------------------------------------------------
     if "nombre_programa" not in enriched:
         enriched["nombre_programa"] = ""
-
+    if "pais" not in enriched:
+        enriched["pais"] = ""
+    if "provincia" not in enriched:
+        enriched["provincia"] = ""
+        
     # 4. Construir diccionario de campos para el PDF
     pdf_fields = {}
     for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
