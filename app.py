@@ -42,11 +42,11 @@ FIXED_PRICING = {
 
 # -------------------------------------------------------
 # MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (CORRECCIÓN FINAL)
-# Basado 100% en el JSON de depuración de Doctorado.
+# Se ajusta 'ciudad' al nombre más específico.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa", # <-- ¡Confirmado!
+    "nombre_programa": "Nombre del programa", # Campo: Nombre del programa
     "titulacion": "Titulaci\u00f3n acad\u00e9mica", 
     
     # DATOS DEL ALUMNO/A
@@ -61,9 +61,10 @@ JSON_TO_PDF_FIELDS = {
     
     # LUGAR DE RESIDENCIA
     "direccion": "Direcci\u00f3n",
-    "ciudad": "Poblaci\u00f3n / Ciudad", # <-- ¡Confirmado!
-    "provincia": "Provincia / Estado / Departamento", # <-- ¡Confirmado!
-    "pais": "Pa\u00eds", # <-- ¡Confirmado!
+    # ¡ÚLTIMO INTENTO DE AJUSTE! Usamos el campo más específico del PDF.
+    "ciudad": "Poblaci\u00f3n / Ciudad / Departamento", 
+    "provincia": "Provincia / Estado / Departamento", 
+    "pais": "Pa\u00eds", 
 
     # Campos de Precio Fijo
     "total": "Total",
@@ -246,16 +247,11 @@ def llenar_pdf():
     
     # ----------------------------------------------------
     # ASEGURAR CLAVES FALTANTES
-    # Se añade una lista explícita para asegurar que siempre haya una clave
-    # para que .get(json_key, "") no falle en el paso 4.
     # ----------------------------------------------------
     required_keys = ["nombre_programa", "pais", "provincia", "ciudad"] 
     
     for key in required_keys:
-        if key not in enriched:
-            enriched[key] = ""
-        # También nos aseguramos de que si existe, no sea None, sino str
-        elif enriched[key] is None:
+        if key not in enriched or enriched[key] is None:
             enriched[key] = ""
         
     # 4. Construir diccionario de campos para el PDF
