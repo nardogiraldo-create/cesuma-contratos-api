@@ -17,36 +17,38 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
+    "masterpropio": "Contrato_MasterPropio.pdf", 
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF
-# **¡ATENCIÓN!** Los nombres (los valores, ej: "TITULACION") 
-# DEBEN COINCIDIR EXACTAMENTE con los campos dentro de tu PDF.
-# Usa el endpoint /listar_campos para verificarlos.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO
+# Estos nombres (el valor a la derecha) se han tomado directamente
+# del PDF de Licenciatura compartido y ahora coinciden con los campos reales.
+# ¡Si falla otro tipo de contrato, deberás verificar esos nombres!
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
-    "titulacion": "TITULACION",
-    "nombre_apellidos": "NOMBRE_APELLIDOS",
-    "documento_id": "DOCUMENTO_ID",
-    "telefono_fijo": "TELEFONO_FIJO",
-    "fecha_nacimiento": "FECHA_NACIMIENTO",
-    "nacionalidad": "NACIONALIDAD",
-    "email": "EMAIL",
-    "telefono_movil": "TELEFONO_MOVIL",
-    "direccion": "DIRECCION",
-    "ciudad": "CIUDAD",
-    
-    # Se mapea directamente al nombre completo del campo de la Hoja de Google
-    "provincia": "PROVINCIA / ESTADO / DEPARTAMENTO", 
-    
-    "pais": "PAIS",
+    # DATOS DEL PROGRAMA
+    "nombre_programa": "Nombre del programa:",
+    "titulacion": "Titulación:",
+
+    # DATOS DEL ALUMNO/A
+    "nombre_apellidos": "Nombre y Apellidos:",
+    "documento_id": "Nº Documento Identidad:",
+    "telefono_fijo": "Teléfono fijo:",
+    "fecha_nacimiento": "Fecha de Nacimiento:",
+    "nacionalidad": " Nacionalidad:", # Incluye un espacio inicial
+    "email": "Email:",
+    "telefono_movil": "Teléfono móvil",
+
+    # LUGAR DE RESIDENCIA
+    "direccion": "Dirección:",
+    "ciudad": "Población / Ciudad:",
+    "provincia": "Provincia / Estado / Departamento:", 
+    "pais": "País:",
 
     # Campos extra (calculados o fijos):
-    "fecha_actual": "FECHA",
-    "fecha_inicio_fija": "FECHA_INICIO",
-    "nombre_programa": "NOMBRE_PROGRAMA",
+    "fecha_actual": "Fecha:",
+    "fecha_inicio_fija": "Fecha de inicio:",
 }
 
 
@@ -74,7 +76,7 @@ def fill_pdf(template_path: str, field_values: dict) -> bytes:
     writer.append_pages_from_reader(reader)
 
     # Copiar el diccionario AcroForm (si existe) y activar NeedAppearances
-    # Esto es CRÍTICO para que el texto se muestre en muchos lectores PDF.
+    # CRÍTICO para que el texto se muestre en muchos lectores PDF.
     root = writer._root_object
     if "/AcroForm" in reader.trailer["/Root"]:
         root.update({NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]})
@@ -83,7 +85,6 @@ def fill_pdf(template_path: str, field_values: dict) -> bytes:
         )
 
     # Rellenar los campos en cada página
-    # Nota: pypdf llena todos los campos, aunque solo se usen en una página
     for page in writer.pages:
         writer.update_page_form_field_values(page, field_values)
 
@@ -203,7 +204,7 @@ def llenar_pdf():
     # Fecha actual en formato dd/mm/aaaa
     enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
     # Fecha de inicio fija
-    enriched["fecha_inicio_fija"] = "10-Dic-2025"
+    enriched["fecha_inicio_fija"] = "10-Dic-2025" 
     # Nombre del programa por si no viene
     if "nombre_programa" not in enriched:
         enriched["nombre_programa"] = ""
@@ -213,10 +214,6 @@ def llenar_pdf():
     for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
         value = enriched.get(json_key, "")
         pdf_fields[pdf_field_name] = str(value)
-
-    # Nota: Eliminamos la lógica de duplicación de 'PROVINCIA' ya que el campo
-    # 'provincia' ahora se mapea directamente a 'PROVINCIA / ESTADO / DEPARTAMENTO'
-    # en JSON_TO_PDF_FIELDS.
 
     try:
         # 5. Rellenar el PDF
