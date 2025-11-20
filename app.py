@@ -3,6 +3,7 @@ import io
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import NameObject, BooleanObject
 
 app = Flask(__name__)
 
@@ -16,8 +17,10 @@ PDF_TEMPLATES = {
     "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
 }
 
-# Mapeo entre claves JSON y nombres de campos en el PDF
-# (agregamos fecha_actual, fecha_inicio_fija y nombre_programa)
+# -------------------------------------------------------
+# MAPEO JSON -> CAMPOS PDF
+# (ajusta estos nombres si los campos internos del PDF son otros)
+# -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     "titulacion": "TITULACION",
     "nombre_apellidos": "NOMBRE_APELLIDOS",
@@ -29,14 +32,13 @@ JSON_TO_PDF_FIELDS = {
     "telefono_movil": "TELEFONO_MOVIL",
     "direccion": "DIRECCION",
     "ciudad": "CIUDAD",
-    "provincia": "PROVINCIA",             # campo principal
+    "provincia": "PROVINCIA",  # campo principal de provincia
     "pais": "PAIS",
 
-    # NUEVOS CAMPOS:
-    # Fecha del día en que se genera el contrato (dd/mm/aaaa)
-    "fecha_actual": "FECHA",
-    # Fecha de inicio fija
-    "fecha_inicio_fija": "FECHA_INICIO",
+    # Campo fecha actual (día de generación del contrato)
+    "fecha_actual": "FECHA",           # dd/mm/aaaa
+    # Campo fecha de inicio fija
+    "fecha_inicio_fija": "FECHA_INICIO",  # 10-Dic-2025
     # Nombre del programa
     "nombre_programa": "NOMBRE_PROGRAMA",
 }
@@ -60,19 +62,19 @@ def home():
 @app.route("/llenar_pdf", methods=["POST"])
 def llenar_pdf():
     """
-    1) Recibe JSON
-    2) Enriquece con campos automáticos (fecha_actual, fecha_inicio_fija)
-    3) Selecciona una plantilla
-    4) Llena los campos
+    1) Recibe JSON desde Apps Script
+    2) Enriquece con fechas (actual + fija)
+    3) Abre plantilla
+    4) Llena los campos de formulario
     5) Devuelve PDF descargable
     """
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Se requiere un JSON válido"}), 400
 
-    # ------------------------------
+    # -----------------------------------
     # 1. Validar tipo_contrato
-    # ------------------------------
+    # -----------------------------------
     tipo_contrato = data.get("tipo_contrato")
     if not tipo_contrato:
         return jsonify({"error": "Falta el campo tipo_contrato"}), 400
@@ -86,9 +88,9 @@ def llenar_pdf():
             }
         ), 400
 
-    # ------------------------------
-    # 2. Ruta de la plantilla
-    # ------------------------------
+    # -----------------------------------
+    # 2. Ruta de plantilla
+    # -----------------------------------
     template_filename = PDF_TEMPLATES[tipo_contrato]
     template_path = os.path.join(os.path.dirname(__file__), template_filename)
 
@@ -101,62 +103,68 @@ def llenar_pdf():
             }
         ), 500
 
-    # ------------------------------
-    # 3. Enriquecer datos con fechas automáticas
-    # ------------------------------
-    enriched_data = dict(data)  # copia del JSON original
+    # -----------------------------------
+    # 3. Enriquecer data con fechas automáticas
+    # -----------------------------------
+    enriched = dict(data)
 
-    # Fecha de hoy en formato dd/mm/aaaa
-    today_str = datetime.now().strftime("%d/%m/%Y")
-    enriched_data["fecha_actual"] = today_str
-
-    # Fecha de inicio fija
-    enriched_data["fecha_inicio_fija"] = "10-Dic-2025"
-
-    # Si no viene nombre_programa en el JSON, que al menos no truene
-    if "nombre_programa" not in enriched_data:
-        enriched_data["nombre_programa"] = ""
+    # Fecha actual: día/mes/año
+    enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
+    # Fecha inicio fija
+    enriched["fecha_inicio_fija"] = "10-Dic-2025"
+    # Nombre del programa por si no llega
+    if "nombre_programa" not in enriched:
+        enriched["nombre_programa"] = ""
 
     try:
-        # ------------------------------
-        # 4. Leer la plantilla y clonar
-        # ------------------------------
+        # -----------------------------------
+        # 4. Leer PDF y copiar páginas + AcroForm
+        # -----------------------------------
         reader = PdfReader(template_path)
-
         writer = PdfWriter()
-        writer.clone_reader_document_root(reader)
 
-        # ------------------------------
-        # 5. Construir diccionario de valores
-        # ------------------------------
+        # Copiar todas las páginas
+        writer.append_pages_from_reader(reader)
+
+        # Copiar /AcroForm (formulario)
+        if "/AcroForm" in reader.trailer["/Root"]:
+            writer._root_object.update(
+                {NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]}
+            )
+            # Forzar NeedAppearances para que se vean los valores
+            writer._root_object["/AcroForm"].update(
+                {NameObject("/NeedAppearances"): BooleanObject(True)}
+            )
+
+        # -----------------------------------
+        # 5. Construir diccionario de valores para campos
+        # -----------------------------------
         pdf_field_values = {}
         for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
-            value = enriched_data.get(json_key, "")
+            value = enriched.get(json_key, "")
             pdf_field_values[pdf_field] = str(value)
 
-        # Truco extra: si el campo de provincia en el PDF
-        # se llamara "PROVINCIA / ESTADO / DEPARTAMENTO",
-        # también lo rellenamos con el mismo valor.
+        # Truco: duplicar valor de PROVINCIA a campo alternativo
         if "PROVINCIA" in pdf_field_values:
             pdf_field_values["PROVINCIA / ESTADO / DEPARTAMENTO"] = pdf_field_values["PROVINCIA"]
 
-        # ------------------------------
-        # 6. Rellenar los campos en todas las páginas
-        # ------------------------------
+        # -----------------------------------
+        # 6. Rellenar los campos en cada página
+        # -----------------------------------
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
-        # ------------------------------
-        # 7. Escribir a memoria
-        # ------------------------------
+        # -----------------------------------
+        # 7. Escribir PDF a memoria
+        # -----------------------------------
         pdf_bytes = io.BytesIO()
         writer.write(pdf_bytes)
         pdf_bytes.seek(0)
 
-        # ------------------------------
+        # -----------------------------------
         # 8. Nombre del archivo final
-        # ------------------------------
-        nombre_estudiante = enriched_data.get("nombre_apellidos", "Contrato")
+        # -----------------------------------
+        nombre_estudiante = enriched.get("nombre_apellidos", "Contrato")
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
 
