@@ -3,6 +3,7 @@ import io
 from datetime import datetime
 
 from flask import Flask, request, jsonify, send_file
+# Asegúrate de que tienes pypdf instalado: pip install pypdf
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject, BooleanObject
 
@@ -21,8 +22,9 @@ PDF_TEMPLATES = {
 
 # -------------------------------------------------------
 # MAPEO JSON -> CAMPOS DEL FORMULARIO PDF
-# Ajusta estos nombres si los campos internos del PDF
-# tienen nombres diferentes.
+# **¡ATENCIÓN!** Los nombres (los valores, ej: "TITULACION") 
+# DEBEN COINCIDIR EXACTAMENTE con los campos dentro de tu PDF.
+# Usa el endpoint /listar_campos para verificarlos.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     "titulacion": "TITULACION",
@@ -35,15 +37,15 @@ JSON_TO_PDF_FIELDS = {
     "telefono_movil": "TELEFONO_MOVIL",
     "direccion": "DIRECCION",
     "ciudad": "CIUDAD",
-    "provincia": "PROVINCIA",  # nombre principal para provincia
+    
+    # Se mapea directamente al nombre completo del campo de la Hoja de Google
+    "provincia": "PROVINCIA / ESTADO / DEPARTAMENTO", 
+    
     "pais": "PAIS",
 
-    # Campos extra:
-    # FECHA del día (dd/mm/aaaa)
+    # Campos extra (calculados o fijos):
     "fecha_actual": "FECHA",
-    # FECHA DE INICIO fija
     "fecha_inicio_fija": "FECHA_INICIO",
-    # NOMBRE DEL PROGRAMA
     "nombre_programa": "NOMBRE_PROGRAMA",
 }
 
@@ -72,15 +74,16 @@ def fill_pdf(template_path: str, field_values: dict) -> bytes:
     writer.append_pages_from_reader(reader)
 
     # Copiar el diccionario AcroForm (si existe) y activar NeedAppearances
+    # Esto es CRÍTICO para que el texto se muestre en muchos lectores PDF.
     root = writer._root_object
     if "/AcroForm" in reader.trailer["/Root"]:
         root.update({NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]})
-        # Necesario para que muchos lectores PDF muestren los valores
         root["/AcroForm"].update(
             {NameObject("/NeedAppearances"): BooleanObject(True)}
         )
 
     # Rellenar los campos en cada página
+    # Nota: pypdf llena todos los campos, aunque solo se usen en una página
     for page in writer.pages:
         writer.update_page_form_field_values(page, field_values)
 
@@ -102,11 +105,9 @@ def home():
 @app.route("/listar_campos", methods=["GET"])
 def listar_campos():
     """
-    Endpoint opcional para depurar.
-    Devuelve la lista de campos del formulario PDF para un tipo_contrato.
-
-    Ejemplo:
-      GET /listar_campos?tipo_contrato=doctorado
+    Endpoint de depuración. Devuelve la lista de campos del formulario PDF.
+    
+    Ejemplo: GET /listar_campos?tipo_contrato=doctorado
     """
     tipo = request.args.get("tipo_contrato", "doctorado").strip().lower()
     if tipo not in PDF_TEMPLATES:
@@ -165,20 +166,7 @@ def listar_campos():
 @app.route("/llenar_pdf", methods=["POST"])
 def llenar_pdf():
     """
-    Endpoint principal:
-
-    1) Recibe JSON con:
-       tipo_contrato, titulacion, nombre_apellidos, documento_id,
-       telefono_fijo, fecha_nacimiento, nacionalidad, email,
-       telefono_movil, direccion, ciudad, provincia, pais, nombre_programa.
-
-    2) Calcula:
-       - fecha_actual (dd/mm/aaaa del día)
-       - fecha_inicio_fija = 10-Dic-2025
-
-    3) Rellena el PDF correspondiente.
-
-    4) Devuelve el PDF generado.
+    Endpoint principal: Recibe datos JSON y devuelve el PDF generado.
     """
     data = request.get_json(silent=True)
     if not data:
@@ -210,7 +198,7 @@ def llenar_pdf():
             }
         ), 500
 
-    # 3. Enriquecer datos
+    # 3. Enriquecer datos (añadir fechas, etc.)
     enriched = dict(data)
     # Fecha actual en formato dd/mm/aaaa
     enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
@@ -226,9 +214,9 @@ def llenar_pdf():
         value = enriched.get(json_key, "")
         pdf_fields[pdf_field_name] = str(value)
 
-    # Extra: duplicar provincia al campo "PROVINCIA / ESTADO / DEPARTAMENTO"
-    if "PROVINCIA" in pdf_fields:
-        pdf_fields["PROVINCIA / ESTADO / DEPARTAMENTO"] = pdf_fields["PROVINCIA"]
+    # Nota: Eliminamos la lógica de duplicación de 'PROVINCIA' ya que el campo
+    # 'provincia' ahora se mapea directamente a 'PROVINCIA / ESTADO / DEPARTAMENTO'
+    # en JSON_TO_PDF_FIELDS.
 
     try:
         # 5. Rellenar el PDF
@@ -239,6 +227,7 @@ def llenar_pdf():
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
 
+        # 7. Devolver el PDF
         return send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
@@ -251,6 +240,6 @@ def llenar_pdf():
 
 
 if __name__ == "__main__":
-    # Para local: python app.py
+    # Para ejecución local: python app.py
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
