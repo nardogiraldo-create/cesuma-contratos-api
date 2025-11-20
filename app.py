@@ -21,39 +21,34 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF
-# **¡ATENCIÓN! Se utilizan los nombres EXACTOS, 
-# incluyendo espacios y dos puntos, según la convención más probable.**
-# Si el Doctorado falla, prueba a quitar los dos puntos (:) de sus campos.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO (FINAL INTENTO)
+# Se utilizan nombres genéricos (Text1, Text2...) para el Doctorado/Licenciatura
+# ya que los nombres basados en el texto visible fallaron.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
-    # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa:",
-    "titulacion": "Titulación:",
+    # El orden se basa en la secuencia probable de creación en el PDF
+    "nombre_programa": "Text1",
+    "titulacion": "Text2",
+    "fecha_inicio_fija": "Text3",
+    
+    "nombre_apellidos": "Text4",
+    "documento_id": "Text5",
+    "telefono_fijo": "Text6",
+    "fecha_nacimiento": "Text7",
+    
+    "email": "Text8",
+    "telefono_movil": "Teléfono móvil", # Este nombre sí funcionó antes
+    "nacionalidad": "Text9",
 
-    # DATOS DEL ALUMNO/A
-    "nombre_apellidos": "Nombre y Apellidos:",
-    "documento_id": "Nº Documento Identidad:",
-    "telefono_fijo": "Teléfono fijo:",
-    "fecha_nacimiento": "Fecha de Nacimiento:",
-    "nacionalidad": " Nacionalidad:", # Incluye un espacio inicial y dos puntos
-    "email": "Email:",
-    "telefono_movil": "Teléfono móvil", # El único que parece no llevar dos puntos
+    "direccion": "Text10",
+    "ciudad": "Text11",
+    "provincia": "Text12",
+    "pais": "Text13", 
 
-    # LUGAR DE RESIDENCIA
-    "direccion": "Dirección:",
-    "ciudad": "Población / Ciudad:",
-    "provincia": "Provincia / Estado / Departamento:", 
-    "pais": "País:",
-
-    # Campos extra (calculados o fijos):
-    "fecha_actual": "Fecha:",
-    "fecha_inicio_fija": "Fecha de inicio:",
+    # Campos extra
+    "fecha_actual": "Text14",
 }
 
-# -------------------------------------------------------
-# OTRAS FUNCIONES (sin cambios)
-# -------------------------------------------------------
 
 def sanitize_filename(text: str, default: str = "Contrato") -> str:
     """
@@ -108,9 +103,7 @@ def home():
 @app.route("/listar_campos", methods=["GET"])
 def listar_campos():
     """
-    Endpoint de depuración. Devuelve la lista de campos del formulario PDF.
-    
-    Ejemplo: GET /listar_campos?tipo_contrato=doctorado
+    Endpoint de depuración. Devuelve la lista de campos del formulario PDF en JSON.
     """
     tipo = request.args.get("tipo_contrato", "doctorado").strip().lower()
     if tipo not in PDF_TEMPLATES:
