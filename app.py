@@ -21,34 +21,33 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO
-# Estos nombres (el valor a la derecha) se han tomado directamente
-# del PDF de Licenciatura compartido y ahora coinciden con los campos reales.
-# ¡Si falla otro tipo de contrato, deberás verificar esos nombres!
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO (FINAL)
+# Se han eliminado los dos puntos (:) de los nombres de campo
+# para coincidir con el campo "Teléfono móvil" que sí funcionó.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa:",
-    "titulacion": "Titulación:",
+    "nombre_programa": "Nombre del programa", # CORREGIDO (sin :)
+    "titulacion": "Titulación",              # CORREGIDO (sin :)
 
     # DATOS DEL ALUMNO/A
-    "nombre_apellidos": "Nombre y Apellidos:",
-    "documento_id": "Nº Documento Identidad:",
-    "telefono_fijo": "Teléfono fijo:",
-    "fecha_nacimiento": "Fecha de Nacimiento:",
-    "nacionalidad": " Nacionalidad:", # Incluye un espacio inicial
-    "email": "Email:",
-    "telefono_movil": "Teléfono móvil",
+    "nombre_apellidos": "Nombre y Apellidos",       # CORREGIDO (sin :)
+    "documento_id": "Nº Documento Identidad",       # CORREGIDO (sin :)
+    "telefono_fijo": "Teléfono fijo",               # CORREGIDO (sin :)
+    "fecha_nacimiento": "Fecha de Nacimiento",       # CORREGIDO (sin :)
+    "nacionalidad": " Nacionalidad",                 # CORREGIDO (sin :)
+    "email": "Email",                               # CORREGIDO (sin :)
+    "telefono_movil": "Teléfono móvil",             # Este funcionó
 
     # LUGAR DE RESIDENCIA
-    "direccion": "Dirección:",
-    "ciudad": "Población / Ciudad:",
-    "provincia": "Provincia / Estado / Departamento:", 
-    "pais": "País:",
+    "direccion": "Dirección",                               # CORREGIDO (sin :)
+    "ciudad": "Población / Ciudad",                         # CORREGIDO (sin :)
+    "provincia": "Provincia / Estado / Departamento",       # CORREGIDO (sin :)
+    "pais": "País",                                         # CORREGIDO (sin :)
 
     # Campos extra (calculados o fijos):
-    "fecha_actual": "Fecha:",
-    "fecha_inicio_fija": "Fecha de inicio:",
+    "fecha_actual": "Fecha",                                # CORREGIDO (sin :)
+    "fecha_inicio_fija": "Fecha de inicio",                 # CORREGIDO (sin :)
 }
 
 
