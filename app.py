@@ -21,35 +21,39 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF CORREGIDO (FINAL)
-# Se han eliminado los dos puntos (:) de los nombres de campo
-# para coincidir con el campo "Teléfono móvil" que sí funcionó.
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF
+# **¡ATENCIÓN! Se utilizan los nombres EXACTOS, 
+# incluyendo espacios y dos puntos, según la convención más probable.**
+# Si el Doctorado falla, prueba a quitar los dos puntos (:) de sus campos.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
-    "nombre_programa": "Nombre del programa", # CORREGIDO (sin :)
-    "titulacion": "Titulación",              # CORREGIDO (sin :)
+    "nombre_programa": "Nombre del programa:",
+    "titulacion": "Titulación:",
 
     # DATOS DEL ALUMNO/A
-    "nombre_apellidos": "Nombre y Apellidos",       # CORREGIDO (sin :)
-    "documento_id": "Nº Documento Identidad",       # CORREGIDO (sin :)
-    "telefono_fijo": "Teléfono fijo",               # CORREGIDO (sin :)
-    "fecha_nacimiento": "Fecha de Nacimiento",       # CORREGIDO (sin :)
-    "nacionalidad": " Nacionalidad",                 # CORREGIDO (sin :)
-    "email": "Email",                               # CORREGIDO (sin :)
-    "telefono_movil": "Teléfono móvil",             # Este funcionó
+    "nombre_apellidos": "Nombre y Apellidos:",
+    "documento_id": "Nº Documento Identidad:",
+    "telefono_fijo": "Teléfono fijo:",
+    "fecha_nacimiento": "Fecha de Nacimiento:",
+    "nacionalidad": " Nacionalidad:", # Incluye un espacio inicial y dos puntos
+    "email": "Email:",
+    "telefono_movil": "Teléfono móvil", # El único que parece no llevar dos puntos
 
     # LUGAR DE RESIDENCIA
-    "direccion": "Dirección",                               # CORREGIDO (sin :)
-    "ciudad": "Población / Ciudad",                         # CORREGIDO (sin :)
-    "provincia": "Provincia / Estado / Departamento",       # CORREGIDO (sin :)
-    "pais": "País",                                         # CORREGIDO (sin :)
+    "direccion": "Dirección:",
+    "ciudad": "Población / Ciudad:",
+    "provincia": "Provincia / Estado / Departamento:", 
+    "pais": "País:",
 
     # Campos extra (calculados o fijos):
-    "fecha_actual": "Fecha",                                # CORREGIDO (sin :)
-    "fecha_inicio_fija": "Fecha de inicio",                 # CORREGIDO (sin :)
+    "fecha_actual": "Fecha:",
+    "fecha_inicio_fija": "Fecha de inicio:",
 }
 
+# -------------------------------------------------------
+# OTRAS FUNCIONES (sin cambios)
+# -------------------------------------------------------
 
 def sanitize_filename(text: str, default: str = "Contrato") -> str:
     """
@@ -75,7 +79,6 @@ def fill_pdf(template_path: str, field_values: dict) -> bytes:
     writer.append_pages_from_reader(reader)
 
     # Copiar el diccionario AcroForm (si existe) y activar NeedAppearances
-    # CRÍTICO para que el texto se muestre en muchos lectores PDF.
     root = writer._root_object
     if "/AcroForm" in reader.trailer["/Root"]:
         root.update({NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]})
