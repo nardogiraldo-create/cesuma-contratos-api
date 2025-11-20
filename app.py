@@ -19,7 +19,8 @@ PDF_TEMPLATES = {
 
 # -------------------------------------------------------
 # MAPEO JSON -> CAMPOS PDF
-# (ajusta estos nombres si los campos internos del PDF son otros)
+# (de momento estos son nombres "supuestos", luego los ajustamos
+# con base en lo que nos devuelva /listar_campos)
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     "titulacion": "TITULACION",
@@ -32,13 +33,13 @@ JSON_TO_PDF_FIELDS = {
     "telefono_movil": "TELEFONO_MOVIL",
     "direccion": "DIRECCION",
     "ciudad": "CIUDAD",
-    "provincia": "PROVINCIA",  # campo principal de provincia
+    "provincia": "PROVINCIA",  # luego lo alineamos con el nombre real
     "pais": "PAIS",
 
-    # Campo fecha actual (día de generación del contrato)
-    "fecha_actual": "FECHA",           # dd/mm/aaaa
-    # Campo fecha de inicio fija
-    "fecha_inicio_fija": "FECHA_INICIO",  # 10-Dic-2025
+    # Fecha actual del contrato (día/mes/año texto)
+    "fecha_actual": "FECHA",           # ajustar si en el PDF se llama distinto
+    # Fecha de inicio fija
+    "fecha_inicio_fija": "FECHA_INICIO",
     # Nombre del programa
     "nombre_programa": "NOMBRE_PROGRAMA",
 }
@@ -56,9 +57,83 @@ def sanitize_filename(text: str, default: str = "Contrato") -> str:
 
 @app.route("/")
 def home():
-    return "API CESUMA lista para generar contratos PDF (endpoint /llenar_pdf activo) 😎"
+    return (
+        "API CESUMA lista para generar contratos PDF. "
+        "Usa /llenar_pdf (POST) o /listar_campos (GET?tipo_contrato=doctorado)."
+    )
 
 
+# -------------------------------------------------------
+# ENDPOINT DE DEBUG: LISTAR CAMPOS DEL FORMULARIO PDF
+# -------------------------------------------------------
+@app.route("/listar_campos", methods=["GET"])
+def listar_campos():
+    """
+    Devuelve en JSON la lista de nombres de campos de formulario
+    (AcroForm) para una plantilla dada.
+
+    Ejemplo:
+    GET /listar_campos?tipo_contrato=doctorado
+    """
+    tipo = request.args.get("tipo_contrato", "doctorado").strip().lower()
+    if tipo not in PDF_TEMPLATES:
+        return jsonify(
+            {
+                "error": "tipo_contrato no válido",
+                "permitidos": list(PDF_TEMPLATES.keys()),
+            }
+        ), 400
+
+    template_filename = PDF_TEMPLATES[tipo]
+    template_path = os.path.join(os.path.dirname(__file__), template_filename)
+
+    if not os.path.exists(template_path):
+        return jsonify(
+            {
+                "error": "No se encontró la plantilla PDF",
+                "plantilla_esperada": template_filename,
+                "tipo_contrato": tipo,
+            }
+        ), 500
+
+    try:
+        reader = PdfReader(template_path)
+        fields = reader.get_fields()
+
+        if not fields:
+            return jsonify(
+                {
+                    "mensaje": "El PDF no tiene campos de formulario (AcroForm) detectables.",
+                    "tipo_contrato": tipo,
+                }
+            ), 200
+
+        # Construimos un dict más legible
+        result = {}
+        for name, field in fields.items():
+            # name: nombre interno del campo
+            # field: diccionario con info del campo
+            result[name] = {
+                "type": str(field.get("/FT", "")),
+                "value": str(field.get("/V", "")),
+                "alt_name": str(field.get("/T", name)),
+            }
+
+        return jsonify(
+            {
+                "tipo_contrato": tipo,
+                "plantilla": template_filename,
+                "campos": result,
+            }
+        ), 200
+
+    except Exception as e:
+        return jsonify({"error": "Error leyendo campos del PDF", "detalle": str(e)}), 500
+
+
+# -------------------------------------------------------
+# ENDPOINT PRINCIPAL: LLENAR PDF
+# -------------------------------------------------------
 @app.route("/llenar_pdf", methods=["POST"])
 def llenar_pdf():
     """
@@ -72,9 +147,7 @@ def llenar_pdf():
     if not data:
         return jsonify({"error": "Se requiere un JSON válido"}), 400
 
-    # -----------------------------------
     # 1. Validar tipo_contrato
-    # -----------------------------------
     tipo_contrato = data.get("tipo_contrato")
     if not tipo_contrato:
         return jsonify({"error": "Falta el campo tipo_contrato"}), 400
@@ -88,9 +161,7 @@ def llenar_pdf():
             }
         ), 400
 
-    # -----------------------------------
     # 2. Ruta de plantilla
-    # -----------------------------------
     template_filename = PDF_TEMPLATES[tipo_contrato]
     template_path = os.path.join(os.path.dirname(__file__), template_filename)
 
@@ -103,67 +174,51 @@ def llenar_pdf():
             }
         ), 500
 
-    # -----------------------------------
     # 3. Enriquecer data con fechas automáticas
-    # -----------------------------------
     enriched = dict(data)
-
-    # Fecha actual: día/mes/año
-    enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")
-    # Fecha inicio fija
+    enriched["fecha_actual"] = datetime.now().strftime("%d/%m/%Y")  # FECHA en dd/mm/aaaa
     enriched["fecha_inicio_fija"] = "10-Dic-2025"
-    # Nombre del programa por si no llega
     if "nombre_programa" not in enriched:
         enriched["nombre_programa"] = ""
 
     try:
-        # -----------------------------------
         # 4. Leer PDF y copiar páginas + AcroForm
-        # -----------------------------------
         reader = PdfReader(template_path)
         writer = PdfWriter()
 
-        # Copiar todas las páginas
         writer.append_pages_from_reader(reader)
 
-        # Copiar /AcroForm (formulario)
+        # Copiar formulario (AcroForm) y activar NeedAppearances
         if "/AcroForm" in reader.trailer["/Root"]:
             writer._root_object.update(
                 {NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]}
             )
-            # Forzar NeedAppearances para que se vean los valores
             writer._root_object["/AcroForm"].update(
                 {NameObject("/NeedAppearances"): BooleanObject(True)}
             )
 
-        # -----------------------------------
         # 5. Construir diccionario de valores para campos
-        # -----------------------------------
         pdf_field_values = {}
         for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
             value = enriched.get(json_key, "")
             pdf_field_values[pdf_field] = str(value)
 
-        # Truco: duplicar valor de PROVINCIA a campo alternativo
+        # Duplicar provincia a otro campo alternativo, por si acaso
         if "PROVINCIA" in pdf_field_values:
-            pdf_field_values["PROVINCIA / ESTADO / DEPARTAMENTO"] = pdf_field_values["PROVINCIA"]
+            pdf_field_values["PROVINCIA / ESTADO / DEPARTAMENTO"] = pdf_field_values[
+                "PROVINCIA"
+            ]
 
-        # -----------------------------------
         # 6. Rellenar los campos en cada página
-        # -----------------------------------
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
-        # -----------------------------------
         # 7. Escribir PDF a memoria
-        # -----------------------------------
         pdf_bytes = io.BytesIO()
         writer.write(pdf_bytes)
         pdf_bytes.seek(0)
 
-        # -----------------------------------
         # 8. Nombre del archivo final
-        # -----------------------------------
         nombre_estudiante = enriched.get("nombre_apellidos", "Contrato")
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
