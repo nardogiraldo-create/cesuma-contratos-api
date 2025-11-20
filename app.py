@@ -1,8 +1,8 @@
 import os
 import io
+from datetime import datetime
 from flask import Flask, request, jsonify, send_file
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import NameObject, BooleanObject
 
 app = Flask(__name__)
 
@@ -13,31 +13,32 @@ PDF_TEMPLATES = {
     "doctorado": "Contrato_Doctorado.pdf",
     "maestria": "Contrato_Maestria.pdf",
     "licenciatura": "Contrato_Licenciatura.pdf",
-    "masterpropio": "Contrato_MasterPropio.pdf",
+    "masterpropio": "Contrato_MasterPropio.pdf",  # tipo_contrato = "masterpropio"
 }
 
-# -------------------------------------------------------
-# MAPEO JSON → CAMPOS DEL PDF
-# -------------------------------------------------------
+# Mapeo entre claves JSON y nombres de campos en el PDF
+# (agregamos fecha_actual, fecha_inicio_fija y nombre_programa)
 JSON_TO_PDF_FIELDS = {
-    # Programa académico
-    "titulacion": "Titulación académica:",
+    "titulacion": "TITULACION",
+    "nombre_apellidos": "NOMBRE_APELLIDOS",
+    "documento_id": "DOCUMENTO_ID",
+    "telefono_fijo": "TELEFONO_FIJO",
+    "fecha_nacimiento": "FECHA_NACIMIENTO",
+    "nacionalidad": "NACIONALIDAD",
+    "email": "EMAIL",
+    "telefono_movil": "TELEFONO_MOVIL",
+    "direccion": "DIRECCION",
+    "ciudad": "CIUDAD",
+    "provincia": "PROVINCIA",             # campo principal
+    "pais": "PAIS",
 
-    # Datos del alumno
-    "nombre_apellidos": "Nombre y Apellidos:",
-    "documento_id": "Documento Identidad:",
-    "telefono_fijo": "Teléfono fijo:",
-    "fecha_nacimiento": "Fecha de Nacimiento:",
-    "nacionalidad": "Nacionalidad:",
-    "email": "Email:",
-    "telefono_movil": "Teléfono móvil",
-    "ocupacion_actual": "Ocupación actual:",  # se llenará fijo con "Trabajador"
-
-    # Lugar de residencia
-    "direccion": "Dirección:",
-    "ciudad": "Población / Ciudad:",
-    "provincia": "Provincia / Estado / Departamento:",
-    "pais": "País:",
+    # NUEVOS CAMPOS:
+    # Fecha del día en que se genera el contrato (dd/mm/aaaa)
+    "fecha_actual": "FECHA",
+    # Fecha de inicio fija
+    "fecha_inicio_fija": "FECHA_INICIO",
+    # Nombre del programa
+    "nombre_programa": "NOMBRE_PROGRAMA",
 }
 
 
@@ -60,14 +61,18 @@ def home():
 def llenar_pdf():
     """
     1) Recibe JSON
-    2) Selecciona plantilla PDF
-    3) Llena los campos
-    4) Devuelve PDF
+    2) Enriquece con campos automáticos (fecha_actual, fecha_inicio_fija)
+    3) Selecciona una plantilla
+    4) Llena los campos
+    5) Devuelve PDF descargable
     """
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Se requiere un JSON válido"}), 400
 
+    # ------------------------------
+    # 1. Validar tipo_contrato
+    # ------------------------------
     tipo_contrato = data.get("tipo_contrato")
     if not tipo_contrato:
         return jsonify({"error": "Falta el campo tipo_contrato"}), 400
@@ -75,72 +80,83 @@ def llenar_pdf():
     tipo_contrato = str(tipo_contrato).strip().lower()
     if tipo_contrato not in PDF_TEMPLATES:
         return jsonify(
-            {"error": "tipo_contrato no válido", "permitidos": list(PDF_TEMPLATES.keys())}
+            {
+                "error": "tipo_contrato no válido",
+                "permitidos": list(PDF_TEMPLATES.keys()),
+            }
         ), 400
 
-    # Ruta plantilla
+    # ------------------------------
+    # 2. Ruta de la plantilla
+    # ------------------------------
     template_filename = PDF_TEMPLATES[tipo_contrato]
     template_path = os.path.join(os.path.dirname(__file__), template_filename)
 
     if not os.path.exists(template_path):
         return jsonify(
             {
-                "error": "No se encontró la plantilla PDF",
+                "error": "No se encontró la plantilla PDF para el tipo de contrato",
                 "plantilla_esperada": template_filename,
                 "tipo_contrato": tipo_contrato,
             }
         ), 500
 
+    # ------------------------------
+    # 3. Enriquecer datos con fechas automáticas
+    # ------------------------------
+    enriched_data = dict(data)  # copia del JSON original
+
+    # Fecha de hoy en formato dd/mm/aaaa
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    enriched_data["fecha_actual"] = today_str
+
+    # Fecha de inicio fija
+    enriched_data["fecha_inicio_fija"] = "10-Dic-2025"
+
+    # Si no viene nombre_programa en el JSON, que al menos no truene
+    if "nombre_programa" not in enriched_data:
+        enriched_data["nombre_programa"] = ""
+
     try:
-        # 1) Leer PDF
+        # ------------------------------
+        # 4. Leer la plantilla y clonar
+        # ------------------------------
         reader = PdfReader(template_path)
 
-        # 2) Clonar estructura
         writer = PdfWriter()
         writer.clone_reader_document_root(reader)
 
-        # 3) Poner valor fijo por defecto para ocupación si no viene
-        if not data.get("ocupacion_actual"):
-            data["ocupacion_actual"] = "Trabajador"
-
-        # 4) Construir diccionario de valores PDF
+        # ------------------------------
+        # 5. Construir diccionario de valores
+        # ------------------------------
         pdf_field_values = {}
+        for json_key, pdf_field in JSON_TO_PDF_FIELDS.items():
+            value = enriched_data.get(json_key, "")
+            pdf_field_values[pdf_field] = str(value)
 
-        for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
-            value = str(data.get(json_key, ""))
+        # Truco extra: si el campo de provincia en el PDF
+        # se llamara "PROVINCIA / ESTADO / DEPARTAMENTO",
+        # también lo rellenamos con el mismo valor.
+        if "PROVINCIA" in pdf_field_values:
+            pdf_field_values["PROVINCIA / ESTADO / DEPARTAMENTO"] = pdf_field_values["PROVINCIA"]
 
-            if not pdf_field_name:
-                continue
-
-            # nombre principal
-            pdf_field_values[pdf_field_name] = value
-
-            # nombre alternativo (con o sin :)
-            if pdf_field_name.endswith(":"):
-                alt_name = pdf_field_name[:-1]
-            else:
-                alt_name = pdf_field_name + ":"
-
-            if alt_name not in pdf_field_values:
-                pdf_field_values[alt_name] = value
-
-        # 5) Escribir en cada página
+        # ------------------------------
+        # 6. Rellenar los campos en todas las páginas
+        # ------------------------------
         for page in writer.pages:
             writer.update_page_form_field_values(page, pdf_field_values)
 
-        # 6) NeedAppearances = true
-        if "/AcroForm" in writer._root_object:
-            writer._root_object["/AcroForm"].update(
-                {NameObject("/NeedAppearances"): BooleanObject(True)}
-            )
-
-        # 7) Salida final
+        # ------------------------------
+        # 7. Escribir a memoria
+        # ------------------------------
         pdf_bytes = io.BytesIO()
         writer.write(pdf_bytes)
         pdf_bytes.seek(0)
 
-        # 8) Nombre del archivo
-        nombre_estudiante = data.get("nombre_apellidos", "Contrato")
+        # ------------------------------
+        # 8. Nombre del archivo final
+        # ------------------------------
+        nombre_estudiante = enriched_data.get("nombre_apellidos", "Contrato")
         nombre_estudiante = sanitize_filename(nombre_estudiante)
         filename = f"Contrato_{tipo_contrato}_{nombre_estudiante}.pdf"
 
@@ -153,35 +169,6 @@ def llenar_pdf():
 
     except Exception as e:
         return jsonify({"error": "Error generando PDF", "detalle": str(e)}), 500
-
-
-# Debug: listar campos del PDF
-@app.route("/listar_campos_pdf", methods=["GET"])
-def listar_campos_pdf():
-    tipo_contrato = request.args.get("tipo_contrato", "").strip().lower()
-    if tipo_contrato not in PDF_TEMPLATES:
-        return jsonify(
-            {"error": "tipo_contrato no válido", "permitidos": list(PDF_TEMPLATES.keys())}
-        ), 400
-
-    template_filename = PDF_TEMPLATES[tipo_contrato]
-    template_path = os.path.join(os.path.dirname(__file__), template_filename)
-
-    if not os.path.exists(template_path):
-        return jsonify({"error": "Plantilla no encontrada"}), 500
-
-    try:
-        reader = PdfReader(template_path)
-        fields = reader.get_fields() or {}
-        return jsonify(
-            {
-                "tipo_contrato": tipo_contrato,
-                "plantilla": template_filename,
-                "campos_encontrados": list(fields.keys()),
-            }
-        )
-    except Exception as e:
-        return jsonify({"error": "Error leyendo campos", "detalle": str(e)}), 500
 
 
 if __name__ == "__main__":
