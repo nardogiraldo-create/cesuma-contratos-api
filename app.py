@@ -20,8 +20,29 @@ PDF_TEMPLATES = {
 }
 
 # -------------------------------------------------------
-# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (CORRECCIÓN FINAL)
-# Se han añadido 'Ocupación actual' y se ha reconfirmado el resto.
+# DATOS DE PRECIO FIJOS SEGÚN EL TIPO DE CONTRATO
+# -------------------------------------------------------
+FIXED_PRICING = {
+    "doctorado": {
+        "total": "$70,200 MXN",
+        "matricula": "$ 2,925 MXN",
+        "tipo_pago": "Fraccionado",
+        "num_cuotas": "23",
+        "importe_cuota": "$2,925 MXN",
+    },
+    "maestria": {
+        "total": "$52,800.00 MXN",
+        "matricula": "$2,640.00 MXN",
+        "tipo_pago": "FRACCIONADO",
+        "num_cuotas": "19",
+        "importe_cuota": "$2,640.00 MXN",
+    },
+    # Puedes añadir más aquí si es necesario
+}
+
+# -------------------------------------------------------
+# MAPEO JSON -> CAMPOS DEL FORMULARIO PDF (FINAL)
+# Se han añadido todos los campos financieros.
 # -------------------------------------------------------
 JSON_TO_PDF_FIELDS = {
     # DATOS DEL PROGRAMA
@@ -36,16 +57,21 @@ JSON_TO_PDF_FIELDS = {
     "nacionalidad": "Nacionalidad",
     "email": "Email",
     "telefono_movil": "Tel\u00e9fono m\u00f3vil",
-    
-    # NUEVO: Campo para hardcoding "Trabajador"
     "ocupacion_actual": "Ocupaci\u00f3n actual", 
     
     # LUGAR DE RESIDENCIA
     "direccion": "Direcci\u00f3n",
     "ciudad": "Poblaci\u00f3n / Ciudad",
-    "provincia": "Provincia / Estado / Departamento", # Nombre exacto del campo
-    "pais": "Pa\u00eds", # Nombre exacto del campo
+    "provincia": "Provincia / Estado / Departamento", 
+    "pais": "Pa\u00eds", 
 
+    # Campos de Precio Fijo (Nombres extraídos del JSON de Doctorado)
+    "total": "Total",
+    "matricula": "Matrícula",
+    "tipo_pago": "Tipo de pago",
+    "num_cuotas": "Cuotas", 
+    "importe_cuota": "Importe",
+    
     # Campos extra (calculados o fijos):
     "fecha_actual": "fecha_original", 
     "fecha_inicio_fija": "Fecha de inicio_af_date", 
@@ -202,7 +228,7 @@ def llenar_pdf():
     # ----------------------------------------------------
     # HARDCODING Y VALORES FIJOS
     # ----------------------------------------------------
-    # Ocupación actual (Solicitud del usuario: fijo a Trabajador)
+    # Ocupación actual (fijo a Trabajador)
     enriched["ocupacion_actual"] = "Trabajador" 
     
     # Fecha actual en formato dd/mm/aaaa
@@ -210,10 +236,16 @@ def llenar_pdf():
     
     # Fecha de inicio fija
     enriched["fecha_inicio_fija"] = "10-Dic-2025" 
+
+    # ----------------------------------------------------
+    # HARDCODING: DATOS DE PRECIO SEGÚN TIPO DE CONTRATO (¡NUEVO!)
+    # ----------------------------------------------------
+    pricing = FIXED_PRICING.get(tipo_contrato, {})
+    if pricing:
+        enriched.update(pricing)
     
     # ----------------------------------------------------
-    # ASEGURAR CLAVES FALTANTES (País, Provincia, Programa)
-    # Se añaden al diccionario, incluso si vienen vacías de Apps Script.
+    # ASEGURAR CLAVES FALTANTES
     # ----------------------------------------------------
     if "nombre_programa" not in enriched:
         enriched["nombre_programa"] = ""
@@ -222,6 +254,11 @@ def llenar_pdf():
     if "provincia" not in enriched:
         enriched["provincia"] = ""
         
+    # Asegurar que las claves de precio existan, incluso si no se usan
+    for key in FIXED_PRICING.get("doctorado", {}).keys():
+        if key not in enriched:
+            enriched[key] = ""
+
     # 4. Construir diccionario de campos para el PDF
     pdf_fields = {}
     for json_key, pdf_field_name in JSON_TO_PDF_FIELDS.items():
